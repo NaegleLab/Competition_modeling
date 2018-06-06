@@ -1,0 +1,81 @@
+###
+#@notes:'This is an atomized translation of an SBML model created on 02/04/2018. The original model has 9 molecules and 5 reactions. The translated model has 5 molecules and 5 rules'
+###
+begin model
+begin parameters
+	EGF_uM		0 #4e-4
+	Kinase_uM	0.81
+	YA_uM		8.1 #0.81
+	GRB2_uM		0.24 #5.4 #0
+	Shc_uM		0.24
+	Kf_r4 		1.0 #units:s_1_uM_1
+	Kr_r4 		1 #units:s_1
+	Kf_r7 		0.54 #units:s_1_uM_1
+	Kf_r6 		63.0 #units:s_1_uM_1
+	Kr_r6 		0.16 #units:s_1
+	Km_PTP		3.3
+	Km_r0 		Km_PTP*(6.022e23*1e-6) #units:uM
+	Vmax_PTP	4.6
+	Vmax_r0 	Vmax_PTP*(6.022e23*1e-6) #units:uM_s_1
+	Kf_r1 		1.0 #units:s_1_uM_1
+	Kr_r1 		1.5 #units:s_1
+	Kr_r7 		0
+end parameters
+
+begin compartments
+	#volume units: 
+	extracellular 3 4e+12*1e-15
+	membrane 2 205.0*1e-15 extracellular
+	cytoplasm 3 2590.0*1e-15 membrane
+end compartments
+
+begin molecule types
+	SH2A(ya)
+	SH2B(ya)
+	Kinase(egf,kinase~kinase~0)
+	EGF(kinase)
+	YA(p~P~0,sh2a,sh2b)
+end molecule types
+begin seed species
+	@cytoplasm:SH2A(ya) GRB2_uM*1e-6*6.022e23*2.59e3*1e-15 #3.7360488e+26*1e-6*1e-15 # 0.24mol/L * 6.022e23/mol *2585.0L #SH2A #SH2A
+	@cytoplasm:SH2B(ya) Shc_uM*1e-6*6.022e23*2.59e3*1e-15 #3.7360488e+26*1e-6*1e-15 # 0.24mol/L * 6.022e23/mol *2585.0L #SH2A #SH2A
+	@membrane:YA(p~0,sh2a,sh2b) YA_uM*1e-6*6.022e23*2.05e2*1e-15 #9.999531e+26*1e-6*1e-15 #original 8.1/  #YA #YA
+	@membrane:Kinase(egf,kinase~kinase) Kinase_uM*1e-6*6.022e23*2.05e2*1e-15 #9.999531e+25*1e-6*1e-15 #original 0.81/  #kinase #kinase
+	@extracellular:EGF(kinase) EGF_uM*1e-6*6.022e23*4e12*1e-15 #9.6352e+33*1e-6*1e-15 #original 0.0004/  #EGF #EGF
+end seed species
+begin observables
+	Species SH2A_cytoplasm @cytoplasm:SH2A(ya) #SH2A
+	Species pYA_membrane @membrane:YA(p~P,sh2a,sh2b) #pYA
+	Species YA_membrane @membrane:YA(p~0,sh2a,sh2b) #YA
+	Species pYASH2A_membrane @membrane:YA(p~P,sh2a!1,sh2b).SH2A(ya!1) #pYASH2A
+	Species pYASH2B_membrane @membrane:YA(p~P,sh2a,sh2b!2).SH2B(ya!2) #pYASH2B
+	Species SH2B_cytoplasm @cytoplasm:SH2B(ya) #SH2B
+	Species Kinase_EGF_membrane @membrane:Kinase(egf!0,kinase~0).EGF(kinase!0) #Kinase_EGF
+	Species kinase_membrane @membrane:Kinase(egf,kinase~kinase) #kinase
+	Species EGF_extracellular @extracellular:EGF(kinase) #EGF
+end observables
+begin functions
+	functionRate3() = if(Vmax_r0 * (1 / (Km_r0 + pYA_membrane)) >= 0, Vmax_r0 * (1 / (Km_r0 + pYA_membrane)), 0)
+	functionRate3m() = if(if(YA_membrane>0, Vmax_r0 * pYA_membrane * (1 / (Km_r0 + pYA_membrane))/YA_membrane,0) < 0, -(if(YA_membrane>0, Vmax_r0 * pYA_membrane * (1 / (Km_r0 + pYA_membrane))/YA_membrane,0)), 0)
+end functions
+begin reaction rules
+	r4: YA(p~P,sh2a,sh2b)@membrane + SH2A(ya)@cytoplasm <-> YA(p~P,sh2a!1,sh2b)@membrane.SH2A(ya!1)@membrane Kf_r4/(6.022e23*1e-6),Kr_r4
+	r7: YA(p~0,sh2a,sh2b)@membrane + Kinase(egf!0,kinase~0)@membrane.EGF(kinase!0)@membrane <-> YA(p~P,sh2a,sh2b)@membrane + Kinase(egf!0,kinase~0)@membrane.EGF(kinase!0)@membrane Kf_r7/(6.022e23*1e-6),Kr_r7
+	r6: Kinase(egf,kinase~kinase)@membrane + EGF(kinase)@extracellular <-> Kinase(egf!0,kinase~0)@membrane.EGF(kinase!0)@membrane Kf_r6/(6.022e23*1e-6),Kr_r6
+	r0: YA(p~P,sh2a,sh2b)@membrane <-> YA(p~0,sh2a,sh2b)@membrane functionRate3(),functionRate3m()
+	r1: YA(p~P,sh2a,sh2b)@membrane + SH2B(ya)@cytoplasm <-> YA(p~P,sh2a,sh2b!2)@membrane.SH2B(ya!2)@membrane Kf_r1/(6.022e23*1e-6),Kr_r1
+end reaction rules
+end model
+
+generate_network({overwrite=>1})
+simulate({method=>"ode",t_start=>0,t_end=>0,n_steps=>100})
+setConcentration("EGF(kinase)@extracellular", 4e-4*1e-6*6.022e23*4e12*1e-15)
+simulate({method=>"ode",continue=>1,t_start=>0,t_end=>10,n_steps=>10})
+setConcentration("EGF(kinase)@extracellular", 0)
+simulate({method=>"ode",continue=>1,t_start=>10,t_end=>100,n_steps=>90})
+#parameter_scan({parameter=>"EGF_uM",par_min=>4e-5,par_max=>4e-2,n_scan_pts=>4,\
+#                method=>"ode",t_end=>100,log_scale=>1})
+#parameter_scan({parameter=>"GRB2_uM",par_min=>0,par_max=>5.5,n_scan_pts=>276,\
+#                method=>"ode",t_end=>100,log_scale=>0})
+#parameter_scan({parameter=>"Shc_uM",par_min=>0,par_max=>6,n_scan_pts=>61,\
+#                method=>"ode",t_end=>100,log_scale=>0})
